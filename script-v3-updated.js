@@ -9,11 +9,19 @@
 let isAdmin = false;
 
 // ============================================
+// 📊 获取保存的响应时间
+// ============================================
+function getSavedResponseTime() {
+  const saved = localStorage.getItem('ezycover_responseTime');
+  return saved ? parseInt(saved) : EXPERIMENT_VARIABLES.responseTime;
+}
+
+// ============================================
 // 📊 应用状态
 // ============================================
 let appState = {
   currentLanguage: EXPERIMENT_VARIABLES.language,
-  responseTime: EXPERIMENT_VARIABLES.responseTime,
+  responseTime: getSavedResponseTime(),
   isLoading: false,
   selectedFlight: null,
   selectedInsurance: null,
@@ -79,6 +87,8 @@ function setupEventListeners() {
   // 自定义响应时间输入框
   document.getElementById('custom-response-time')?.addEventListener('change', function() {
     appState.responseTime = parseInt(this.value);
+    localStorage.setItem('ezycover_responseTime', this.value);
+    alert(appState.currentLanguage === 'zh' ? '响应时间已保存！' : 'Response time saved!');
     // 更新按钮状态
     document.querySelectorAll('.response-btn').forEach(btn => {
       btn.classList.remove('active');
@@ -110,6 +120,8 @@ function setupEventListeners() {
 function handleResponseTimeChange(event) {
   const time = event.target.getAttribute('data-time');
   appState.responseTime = parseInt(time);
+  localStorage.setItem('ezycover_responseTime', time);
+  alert(appState.currentLanguage === 'zh' ? '响应时间已保存！' : 'Response time saved!');
   
   // 更新按钮状态
   document.querySelectorAll('.response-btn').forEach(btn => {
