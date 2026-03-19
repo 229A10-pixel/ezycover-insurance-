@@ -96,6 +96,10 @@
     <!-- Configuration Files -->
     <script src="config-v3.js"></script>
     
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
     <!-- Data Manager -->
     <script src="data-manager.js"></script>
     
@@ -108,7 +112,6 @@
         function openDashboard() {
             window.open('admin-dashboard.html', 'dashboard', 'width=1400,height=900');
         }
-
         // 导出数据
         function exportDashboardData() {
             if (dataManager) {
