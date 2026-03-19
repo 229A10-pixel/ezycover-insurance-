@@ -119,31 +119,52 @@
             }
         }
     </script>
-    <!-- 诊断工具 -->
+  <!-- 诊断工具 -->
     <script>
-        console.log('=== 数据同步诊断 ===');
-        console.log('1. Firebase SDK 是否加载:', typeof firebase !== 'undefined' ? '✅ 是' : '❌ 否');
-        console.log('2. Firestore 是否可用:', typeof firebase !== 'undefined' && firebase.firestore ? '✅ 是' : '❌ 否');
-        console.log('3. localStorage 测试:', typeof localStorage !== 'undefined' ? '✅ 是' : '❌ 否');
-        console.log('4. useFirebase 状态:', typeof useFirebase !== 'undefined' ? useFirebase : '未定义');
-        console.log('5. db 状态:', typeof db !== 'undefined' && db ? '✅ 已连接' : '❌ 未连接');
+        console.log('=== 详细诊断开始 ===');
         
-        // 测试 Firestore 连接
+        // 检查 1: Firebase SDK
+        console.log('1. Firebase SDK:', typeof firebase !== 'undefined' ? '✅ 已加载' : '❌ 未加载');
+        
+        // 检查 2: Firestore 可用性
         if (typeof firebase !== 'undefined' && firebase.firestore) {
+            console.log('2. Firestore SDK:', '✅ 可用');
+            
+            // 检查 3: Firebase 配置
+            console.log('3. Firebase 配置:', FIREBASE_CONFIG);
+            
+            // 检查 4: 尝试连接 Firestore
             try {
                 firebase.initializeApp(FIREBASE_CONFIG);
                 const testDb = firebase.firestore();
-                testDb.collection('test').add({test: true}).then(() => {
-                    console.log('6. Firestore 写入测试: ✅ 成功');
-                    testDb.collection('test').get().then(() => {
-                        console.log('7. Firestore 读取测试: ✅ 成功');
-                    }).catch(e => console.log('7. Firestore 读取测试: ❌ 失败 -', e.message));
-                }).catch(e => console.log('6. Firestore 写入测试: ❌ 失败 -', e.message));
+                
+                console.log('4. Firestore 连接:', '✅ 成功');
+                
+                // 测试写入
+                testDb.collection('diagnostic_test').add({
+                    message: '测试消息',
+                    timestamp: new Date().toISOString(),
+                    device: navigator.userAgent
+                }).then(() => {
+                    console.log('5. Firestore 写入测试:', '✅ 成功');
+                    
+                    // 测试读取
+                    testDb.collection('diagnostic_test').get().then((snapshot) => {
+                        console.log('6. Firestore 读取测试:', '✅ 成功，共', snapshot.docs.length, '条记录');
+                        console.log('=== 诊断完成 ===');
+                    }).catch(e => {
+                        console.log('6. Firestore 读取测试:', '❌ 失败 -', e.message);
+                    });
+                }).catch(e => {
+                    console.log('5. Firestore 写入测试:', '❌ 失败 -', e.message);
+                    console.log('可能原因: Firestore 安全规则未设置为读写');
+                });
             } catch(e) {
-                console.log('Firebase 初始化失败:', e.message);
+                console.log('4. Firestore 连接:', '❌ 失败 -', e.message);
             }
+        } else {
+            console.log('2. Firestore SDK:', '❌ 不可用');
         }
-        console.log('=== 诊断结束 ===');
     </script>
 </body>
 </html>
