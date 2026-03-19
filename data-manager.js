@@ -9,12 +9,12 @@
 // Firebase 配置 - 请替换为您自己的 Firebase 项目配置
 // 申请地址: https://console.firebase.google.com/
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDemo-REPLACE-WITH-YOUR-KEY",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef123456"
+  apiKey: "AIzaSyBGi7uyQkCoyIoXGKIcCdDXojgwQ0pl2nY",
+  authDomain: "clt-research-website.firebaseapp.com",
+  projectId: "clt-research-website",
+  storageBucket: "clt-research-website.firebasestorage.app",
+  messagingSenderId: "71205781808",
+  appId: "1:71205781808:web:9ec2aa427a1a6e11efc8f5"
 };
 let db = null;
 let useFirebase = false;
