@@ -1,5 +1,5 @@
 /**
- * CLT研究数据管理系统 V2
+ * CLT研究数据管理系统
  * 负责采集、存储、管理和导出实验数据
  * 支持多设备实时同步（使用 Firebase Firestore）
  */
@@ -8,185 +8,101 @@
 // 🔥 Firebase 配置（多设备数据同步）
 // ============================================
 
-// ⚠️ 请将以下占位符替换为您自己的 Firebase 项目配置
+// Firebase 配置 - 请替换为您自己的 Firebase 项目配置
 // 申请地址: https://console.firebase.google.com/
-const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+const firebaseConfig = {
+  apiKey: "AIzaSyBGi7uyQkCoyIoXGKIcCdDXojgwQ0pl2nY",
+  authDomain: "clt-research-website.firebaseapp.com",
+  projectId: "clt-research-website",
+  storageBucket: "clt-research-website.firebasestorage.app",
+  messagingSenderId: "71205781808",
+  appId: "1:71205781808:web:9ec2aa427a1a6e11efc8f5"
 };
-
-let db = null;
 let useFirebase = false;
 let pendingData = [];
-let firebaseInitialized = false;
 
+// 初始化 Firebase
 function initializeFirebase() {
-  if (firebaseInitialized) return useFirebase;
-  
   try {
     if (typeof firebase !== 'undefined' && firebase.firestore) {
       firebase.initializeApp(FIREBASE_CONFIG);
       db = firebase.firestore();
       useFirebase = true;
-      firebaseInitialized = true;
-      console.log('✅ Firebase initialized successfully - Multi-device sync enabled');
+      console.log('Firebase initialized successfully - Multi-device sync enabled');
       syncPendingData();
       return true;
-    } else {
-      console.warn('⚠️ Firebase SDK not loaded, falling back to localStorage only');
     }
   } catch (error) {
-    console.error('❌ Firebase initialization failed:', error);
-    console.log('📱 Falling back to localStorage - data will NOT sync across devices');
+    console.warn('Firebase initialization failed, falling back to localStorage:', error);
   }
   useFirebase = false;
-  firebaseInitialized = true;
   return false;
 }
 
+// 同步待提交的数据
 async function syncPendingData() {
   if (!useFirebase || pendingData.length === 0) return;
-  console.log(`📤 Syncing ${pendingData.length} pending records to Firebase...`);
   for (const data of pendingData) {
-    const saved = await saveToFirestore(data);
-    if (saved) {
-      pendingData = pendingData.filter(d => d !== data);
-    }
+    await saveToFirestore(data);
   }
-  console.log(`✅ Pending sync complete. ${pendingData.length} records remaining.`);
+  pendingData = [];
 }
 
+// 保存到 Firestore
 async function saveToFirestore(data) {
   if (!useFirebase || !db) return false;
   try {
-    const docRef = await db.collection('clt_research_data').add({
+    await db.collection('clt_research_data').add({
       ...data,
-      serverTimestamp: firebase.firestore.FieldValue.serverTimestamp(),
-      clientTimestamp: data.timestamp || new Date().toISOString()
+      serverTimestamp: firebase.firestore.FieldValue.serverTimestamp()
     });
-    console.log('✅ Data saved to Firebase:', docRef.id);
+    console.log('Data saved to Firebase Firestore');
     return true;
   } catch (error) {
-    console.error('❌ Error saving to Firestore:', error);
+    console.error('Error saving to Firestore:', error);
     return false;
   }
 }
 
+// 从 Firestore 加载数据
 async function loadFromFirestore() {
   if (!useFirebase || !db) return [];
   try {
     const snapshot = await db.collection('clt_research_data')
-      .orderBy('clientTimestamp', 'desc')
+      .orderBy('timestamp', 'asc')
       .get();
-    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    console.log(`📥 Loaded ${data.length} records from Firebase`);
-    return data;
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('❌ Error loading from Firestore:', error);
+    console.error('Error loading from Firestore:', error);
     return [];
   }
 }
 
+// 监听 Firestore 实时更新
 function listenToFirestore(callback) {
   if (!useFirebase || !db) return null;
-  console.log('👂 Firebase real-time listener started');
   return db.collection('clt_research_data')
-    .orderBy('clientTimestamp', 'desc')
+    .orderBy('timestamp', 'asc')
     .onSnapshot(snapshot => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log(`🔄 Firebase data updated: ${data.length} records`);
       callback(data);
     }, error => {
-      console.error('❌ Firestore listener error:', error);
+      console.error('Firestore listener error:', error);
     });
 }
 
+// 从 Firestore 清除所有数据
 async function clearFirestoreData() {
   if (!useFirebase || !db) return;
   try {
     const snapshot = await db.collection('clt_research_data').get();
-    if (snapshot.docs.length === 0) {
-      console.log('ℹ️ No data in Firestore to clear');
-      return;
-    }
     const batch = db.batch();
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
     await batch.commit();
-    console.log('✅ All Firestore data cleared');
+    console.log('All Firestore data cleared');
   } catch (error) {
-    console.error('❌ Error clearing Firestore:', error);
+    console.error('Error clearing Firestore:', error);
   }
-}
-
-// ============================================
-// ⚙️ 实验设置同步（跨设备）
-// ============================================
-
-async function saveSettingsToFirestore(settings) {
-  if (!useFirebase || !db) {
-    localStorage.setItem('experiment_settings', JSON.stringify(settings));
-    return false;
-  }
-  try {
-    await db.collection('experiment_settings').doc('main').set({
-      ...settings,
-      lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: 'device_' + navigator.userAgent.slice(-8)
-    });
-    console.log('✅ Settings saved to cloud:', settings);
-    return true;
-  } catch (error) {
-    console.error('❌ Error saving settings:', error);
-    localStorage.setItem('experiment_settings', JSON.stringify(settings));
-    return false;
-  }
-}
-
-async function loadSettingsFromFirestore() {
-  if (!useFirebase || !db) {
-    return JSON.parse(localStorage.getItem('experiment_settings') || 'null');
-  }
-  try {
-    const doc = await db.collection('experiment_settings').doc('main').get();
-    if (doc.exists) {
-      const settings = doc.data();
-      delete settings.lastUpdated;
-      delete settings.updatedBy;
-      console.log('✅ Settings loaded from cloud:', settings);
-      return settings;
-    }
-  } catch (error) {
-    console.error('❌ Error loading settings:', error);
-  }
-  return JSON.parse(localStorage.getItem('experiment_settings') || 'null');
-}
-
-function listenToSettingsChanges(callback) {
-  if (!useFirebase || !db) {
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'experiment_settings') {
-        callback(JSON.parse(e.newValue || '{}'));
-      }
-    });
-    return () => {};
-  }
-  console.log('👂 Settings listener started');
-  return db.collection('experiment_settings').doc('main')
-    .onSnapshot(doc => {
-      if (doc.exists) {
-        const settings = doc.data();
-        delete settings.lastUpdated;
-        delete settings.updatedBy;
-        console.log('🔄 Settings updated from cloud:', settings);
-        callback(settings);
-      }
-    }, error => {
-      console.error('❌ Settings listener error:', error);
-    });
 }
 
 // ============================================
@@ -211,15 +127,16 @@ class DataManager {
       surveyAnswers: {},
       timestamp: null
     };
-    this.allCloudData = [];
     this.loadAllData();
     initializeFirebase();
   }
 
+  // 生成唯一会话ID
   generateSessionId() {
     return 'SESSION_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
   }
 
+  // 记录用户选择
   recordUserChoice(type, value) {
     this.sessionData.userChoices[type] = value;
     if (type === 'departure' && !this.sessionData.decisionStartTime) {
@@ -227,12 +144,14 @@ class DataManager {
     }
   }
 
+  // 记录保险选择（决策结束）
   recordInsuranceChoice(insurance) {
     this.sessionData.userChoices.insurance = insurance;
     this.sessionData.decisionEndTime = new Date();
-    this.sessionData.decisionTime = (this.sessionData.decisionEndTime - this.sessionData.decisionStartTime) / 1000;
+    this.sessionData.decisionTime = (this.sessionData.decisionEndTime - this.sessionData.decisionStartTime) / 1000; // 秒
   }
 
+  // 记录问卷答案
   recordSurveyAnswer(questionId, answer, variable) {
     this.sessionData.surveyAnswers[questionId] = {
       answer: answer,
@@ -240,12 +159,15 @@ class DataManager {
     };
   }
 
+  // 完成数据收集
   async completeSession() {
     this.sessionData.timestamp = new Date().toISOString();
     this.sessionData.endTime = new Date().toISOString();
     
+    // 转换为ANOVA分析格式
     const analysisData = this.convertToAnalysisFormat();
     
+    // 同时保存到 localStorage（本地备份）和 Firestore（云端同步）
     this.saveToLocalStorage(analysisData);
     
     if (useFirebase) {
@@ -257,39 +179,54 @@ class DataManager {
       pendingData.push(analysisData);
     }
     
+    // 触发自定义事件以通知其他标签页
     window.dispatchEvent(new CustomEvent('dataUpdated', { detail: analysisData }));
     
     return analysisData;
   }
 
+  // 转换为ANOVA分析格式
   convertToAnalysisFormat() {
     const data = {
       sessionId: this.sessionData.sessionId,
       responseTime: this.sessionData.responseTime,
       language: this.sessionData.language,
       decisionTime: this.sessionData.decisionTime || 0,
+      
+      // 自变量
       temporal_distance: this.getAnswerByVariable('temporal_distance'),
       spatial_distance: this.getAnswerByVariable('spatial_distance'),
       hypothetical_distance: this.getAnswerByVariable('hypothetical_distance'),
       social_distance: this.getAnswerByVariable('social_distance'),
+      
+      // 因变量
       insurance_choice: this.getAnswerByVariable('insurance_choice'),
       wtp_amount: this.getAnswerByVariable('wtp_amount'),
       wtp_acceptance: this.getAnswerByVariable('wtp_acceptance'),
       construal_level: this.getAnswerByVariable('construal_level'),
+      
+      // 控制变量
       risk_perception: this.getAnswerByVariable('risk_perception'),
       age_group: this.getAnswerByVariable('age_group'),
+      
+      // 操纵检验
       manipulation_check_temporal: this.getAnswerByVariable('manipulation_check_temporal'),
       manipulation_check_spatial: this.getAnswerByVariable('manipulation_check_spatial'),
       manipulation_check_speed: this.getAnswerByVariable('manipulation_check_speed'),
+      
+      // 实操数据
       departure: this.sessionData.userChoices.departure,
       destination: this.sessionData.userChoices.destination,
       date: this.sessionData.userChoices.date,
+      
+      // 时间戳
       timestamp: this.sessionData.timestamp
     };
     
     return data;
   }
 
+  // 根据变量名获取答案
   getAnswerByVariable(variable) {
     for (const [questionId, data] of Object.entries(this.sessionData.surveyAnswers)) {
       if (data.variable === variable) {
@@ -299,51 +236,37 @@ class DataManager {
     return null;
   }
 
+  // 保存到本地存储
   saveToLocalStorage(data) {
-    try {
-      let allData = JSON.parse(localStorage.getItem('clt_research_data') || '[]');
-      const exists = allData.some(d => d.sessionId === data.sessionId);
-      if (!exists) {
-        allData.push(data);
-        localStorage.setItem('clt_research_data', JSON.stringify(allData));
-        console.log('💾 Data saved to localStorage');
-      }
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
-    }
+    let allData = JSON.parse(localStorage.getItem('clt_research_data') || '[]');
+    allData.push(data);
+    localStorage.setItem('clt_research_data', JSON.stringify(allData));
   }
 
+  // 加载所有数据
   async loadAllData() {
     if (useFirebase) {
-      this.allCloudData = await loadFromFirestore();
-      return this.allCloudData;
+      return await loadFromFirestore();
     }
     return JSON.parse(localStorage.getItem('clt_research_data') || '[]');
   }
 
+  // 获取所有数据（同步版本，返回本地缓存）
   getAllData() {
-    if (useFirebase) {
-      return this.allCloudData;
-    }
     return JSON.parse(localStorage.getItem('clt_research_data') || '[]');
   }
 
+  // 异步获取所有数据（从云端）
   async getAllDataAsync() {
     return await this.loadAllData();
   }
 
-  async refreshCloudData() {
-    if (useFirebase) {
-      this.allCloudData = await loadFromFirestore();
-      return this.allCloudData;
-    }
-    return this.getAllData();
-  }
-
+  // 实时监听数据变化
   listenToDataUpdates(callback) {
     if (useFirebase) {
       return listenToFirestore(callback);
     } else {
+      // 降级：使用 storage 事件监听
       const handler = (e) => {
         if (e.key === 'clt_research_data') {
           callback(JSON.parse(e.newValue || '[]'));
@@ -354,6 +277,7 @@ class DataManager {
     }
   }
 
+  // 异步筛选数据
   async filterDataAsync(filters) {
     let data = await this.loadAllData();
     
@@ -370,6 +294,7 @@ class DataManager {
     return data;
   }
 
+  // 按条件筛选数据（同步版本，使用本地缓存）
   filterData(filters) {
     let data = this.getAllData();
     
@@ -386,36 +311,51 @@ class DataManager {
     return data;
   }
 
+  // 异步导出为CSV格式
   async exportToCSVAsync() {
     const data = await this.loadAllData();
     this.exportDataToCSV(data);
   }
 
+  // 导出为CSV格式（通用方法）
   exportToCSV() {
-    const data = this.getAllData();
-    if (useFirebase && data.length === 0) {
-      this.refreshCloudData().then(() => {
-        this.exportDataToCSV(this.allCloudData);
-      });
-    } else {
-      this.exportDataToCSV(data);
-    }
+    const data = useFirebase ? this.getAllData() : this.loadAllData();
+    this.exportDataToCSV(data);
   }
 
+  // 导出数据到 CSV
   exportDataToCSV(data) {
     if (data.length === 0) {
       alert('没有数据可导出');
       return;
     }
 
+    // CSV头部
     const headers = [
-      '会话ID', '响应时间(ms)', '语言', '决策时长(秒)',
-      '时间距离', '空间距离', '假设距离', '社会距离',
-      '保险选择', 'WTP金额', '价格接受度', '构念水平',
-      '风险感知', '年龄组', '时间距离感知', '空间距离感知', '网站速度感知',
-      '出发地', '目的地', '出行日期', '提交时间'
+      '会话ID',
+      '响应时间(ms)',
+      '语言',
+      '决策时长(秒)',
+      '时间距离',
+      '空间距离',
+      '假设距离',
+      '社会距离',
+      '保险选择',
+      'WTP金额',
+      '价格接受度',
+      '构念水平',
+      '风险感知',
+      '年龄组',
+      '时间距离感知',
+      '空间距离感知',
+      '网站速度感知',
+      '出发地',
+      '目的地',
+      '出行日期',
+      '提交时间'
     ];
 
+    // CSV行
     const rows = data.map(d => [
       d.sessionId || d.id || '',
       d.responseTime || '',
@@ -437,14 +377,16 @@ class DataManager {
       d.departure || '',
       d.destination || '',
       d.date || '',
-      d.timestamp || d.clientTimestamp || ''
+      d.timestamp || ''
     ]);
 
+    // 生成CSV内容
     let csv = headers.join(',') + '\n';
     rows.forEach(row => {
       csv += row.map(cell => `"${cell || ''}"`).join(',') + '\n';
     });
 
+    // 下载
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -456,31 +398,35 @@ class DataManager {
     document.body.removeChild(link);
   }
 
+  // 导出为Excel格式（使用CSV作为中间格式）
   exportToExcel() {
     this.exportToCSV();
   }
 
+  // 清空所有数据
   async clearAllData() {
     if (confirm('确定要清空所有数据吗？此操作不可撤销。')) {
       localStorage.removeItem('clt_research_data');
       if (useFirebase) {
         await clearFirestoreData();
       }
-      this.allCloudData = [];
       alert('数据已清空');
     }
   }
 
+  // 获取数据统计（异步版本）
   async getStatisticsAsync() {
     const data = await this.loadAllData();
     return this.calculateStatistics(data);
   }
 
+  // 获取数据统计（同步版本）
   getStatistics() {
-    const data = this.getAllData();
+    const data = useFirebase ? this.getAllData() : this.loadAllData();
     return this.calculateStatistics(data);
   }
 
+  // 计算统计数据
   calculateStatistics(data) {
     const stats = {
       totalRecords: data.length,
@@ -489,10 +435,12 @@ class DataManager {
       avgDecisionTime: 0
     };
 
+    // 保险选择分布
     data.forEach(d => {
       stats.insuranceDistribution[d.insurance_choice] = (stats.insuranceDistribution[d.insurance_choice] || 0) + 1;
     });
 
+    // WTP平均值
     const wtpValues = data.map(d => {
       if (d.wtp_amount === '0-20元') return 10;
       if (d.wtp_amount === '20-40元') return 30;
@@ -501,26 +449,11 @@ class DataManager {
     });
     stats.wtpAverage = wtpValues.reduce((a, b) => a + b, 0) / data.length || 0;
 
+    // 平均决策时长
     const decisionTimes = data.map(d => d.decisionTime || 0);
     stats.avgDecisionTime = decisionTimes.reduce((a, b) => a + b, 0) / data.length || 0;
 
     return stats;
-  }
-
-  isFirebaseEnabled() {
-    return useFirebase;
-  }
-
-  async saveSettings(settings) {
-    await saveSettingsToFirestore(settings);
-  }
-
-  async loadSettings() {
-    return await loadSettingsFromFirestore();
-  }
-
-  listenToSettingsChanges(callback) {
-    return listenToSettingsChanges(callback);
   }
 }
 
