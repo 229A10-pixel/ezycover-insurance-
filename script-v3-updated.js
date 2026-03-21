@@ -104,20 +104,27 @@ function setupEventListeners() {
   });
   
   // 自定义响应时间输入框
-  document.getElementById('custom-response-time')?.addEventListener('change', async function() {
-    appState.responseTime = parseInt(this.value);
-    EXPERIMENT_VARIABLES.responseTime = parseInt(this.value);
+  document.getElementById('custom-response-time')?.addEventListener('change', function() {
+    const responseTime = parseInt(this.value);
+    appState.responseTime = responseTime;
+    EXPERIMENT_VARIABLES.responseTime = responseTime;
     localStorage.setItem('ezycover_responseTime', this.value);
     
-    // 同步到云端
+    // 同步到云端（异步，不阻塞）
     if (typeof dataManager !== 'undefined' && dataManager.saveSettings) {
-      await dataManager.saveSettings({ responseTime: parseInt(this.value) });
+      dataManager.saveSettings({ responseTime: responseTime })
+        .then(() => console.log('✅ Response time synced to cloud'))
+        .catch(err => console.error('❌ Sync error:', err));
     }
     
-    alert(appState.currentLanguage === 'zh' ? '响应时间已保存！(跨设备同步)' : 'Response time saved! (synced across devices)');
+    alert('修改成功！响应时间: ' + responseTime + 'ms');
+    
     // 更新按钮状态
     document.querySelectorAll('.response-btn').forEach(btn => {
       btn.classList.remove('active');
+      if (btn.getAttribute('data-time') === responseTime.toString()) {
+        btn.classList.add('active');
+      }
     });
   });
   
@@ -143,18 +150,24 @@ function setupEventListeners() {
 // ============================================
 // ⏱️ 响应时间控制
 // ============================================
-async function handleResponseTimeChange(event) {
+function handleResponseTimeChange(event) {
   const time = event.target.getAttribute('data-time');
-  appState.responseTime = parseInt(time);
-  EXPERIMENT_VARIABLES.responseTime = parseInt(time);
+  const responseTime = parseInt(time);
+  
+  appState.responseTime = responseTime;
+  EXPERIMENT_VARIABLES.responseTime = responseTime;
   localStorage.setItem('ezycover_responseTime', time);
   
-  // 同步到云端
+  // 同步到云端（异步，不阻塞）
   if (typeof dataManager !== 'undefined' && dataManager.saveSettings) {
-    await dataManager.saveSettings({ responseTime: parseInt(time) });
+    dataManager.saveSettings({ responseTime: responseTime })
+      .then(() => console.log('✅ Response time synced to cloud'))
+      .catch(err => console.error('❌ Sync error:', err));
+  } else {
+    console.log('⚠️ dataManager not ready, saving locally only');
   }
   
-  alert(appState.currentLanguage === 'zh' ? '响应时间已保存！(跨设备同步)' : 'Response time saved! (synced across devices)');
+  alert('修改成功！响应时间: ' + time + 'ms');
   
   // 更新按钮状态
   document.querySelectorAll('.response-btn').forEach(btn => {
