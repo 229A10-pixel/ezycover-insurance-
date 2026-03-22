@@ -208,6 +208,120 @@
                 padding: 15px;
             }
         }
+        
+        /* 完成弹窗样式 */
+        #completion-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        #completion-overlay.hidden {
+            display: none;
+        }
+        
+        .completion-popup {
+            background: white;
+            border-radius: 16px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: popupSlideIn 0.3s ease;
+        }
+        
+        .completion-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #165DFF 0%, #0d47e1 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 40px auto 20px;
+            animation: checkmarkPop 0.5s ease 0.2s both;
+        }
+        
+        @keyframes checkmarkPop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        
+        .completion-icon span {
+            font-size: 40px;
+        }
+        
+        .completion-title {
+            color: #165DFF;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0 0 15px 0;
+        }
+        
+        .completion-message {
+            color: #666;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin: 0 0 30px 0;
+            padding: 0 30px;
+        }
+        
+        .completion-footer {
+            padding: 0 30px 40px;
+        }
+        
+        .completion-btn {
+            background: #165DFF;
+            color: white;
+            border: none;
+            padding: 15px 60px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(22, 93, 255, 0.3);
+        }
+        
+        .completion-btn:hover {
+            background: #0d47e1;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(22, 93, 255, 0.4);
+        }
+        
+        @media (max-width: 768px) {
+            .completion-title {
+                font-size: 1.5rem;
+            }
+            
+            .completion-icon {
+                width: 70px;
+                height: 70px;
+                font-size: 35px;
+            }
+            
+            .completion-message {
+                padding: 0 20px;
+            }
+            
+            .completion-footer {
+                padding: 0 20px 30px;
+            }
+            
+            .completion-btn {
+                width: 100%;
+                padding: 15px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -262,6 +376,25 @@
             <div class="intro-footer">
                 <button id="intro-btn" class="intro-btn" disabled onclick="acceptConsent()">I Agree & Continue</button>
                 <p class="intro-footer-note">Your participation is entirely voluntary</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 完成弹窗 -->
+    <div id="completion-overlay" class="hidden">
+        <div class="completion-popup">
+            <div class="completion-icon">
+                <span>✓</span>
+            </div>
+            <h2 class="completion-title">Study Completed!</h2>
+            <p class="completion-message">
+                Thank you for participating in this research study.<br>
+                Your responses have been successfully submitted.<br>
+                <br>
+                We appreciate your contribution to academic research!
+            </p>
+            <div class="completion-footer">
+                <button class="completion-btn" onclick="exitStudy()">Exit</button>
             </div>
         </div>
     </div>
@@ -399,6 +532,42 @@
             introOverlay.style.animation = 'popupSlideIn 0.3s ease reverse';
             setTimeout(() => {
                 introOverlay.classList.add('hidden');
+            }, 300);
+        }
+        
+        // 显示完成弹窗
+        function showCompletionPopup() {
+            const completionOverlay = document.getElementById('completion-overlay');
+            completionOverlay.classList.remove('hidden');
+        }
+        
+        // 退出研究
+        function exitStudy() {
+            // 关闭问卷弹窗（如果还开着）
+            const surveyModal = document.getElementById('survey-modal');
+            if (surveyModal) {
+                surveyModal.classList.add('hidden');
+            }
+            
+            // 显示感谢信息后关闭
+            const completionOverlay = document.getElementById('completion-overlay');
+            completionOverlay.style.animation = 'popupSlideIn 0.3s ease reverse';
+            setTimeout(() => {
+                completionOverlay.classList.add('hidden');
+                // 尝试关闭页面
+                window.close();
+                // 如果无法关闭，显示感谢消息
+                document.body.innerHTML = `
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8f9fa;">
+                        <div style="text-align:center;padding:40px;">
+                            <div style="width:80px;height:80px;background:linear-gradient(135deg,#165DFF,#0d47e1);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
+                                <span style="font-size:40px;color:white;">✓</span>
+                            </div>
+                            <h2 style="color:#165DFF;font-size:1.8rem;margin:0 0 15px;">Thank You!</h2>
+                            <p style="color:#666;font-size:1rem;line-height:1.6;">You may now close this tab.</p>
+                        </div>
+                    </div>
+                `;
             }, 300);
         }
     </script>
