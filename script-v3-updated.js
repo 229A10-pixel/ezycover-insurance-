@@ -459,54 +459,53 @@ function confirmInsurance() {
 // 📋 显示问卷弹窗
 // ============================================
 function showSurveyModal() {
-  let modal = document.getElementById('survey-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'survey-modal';
-    modal.className = 'modal show';
+  try {
+    let modal = document.getElementById('survey-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'survey-modal';
+      modal.className = 'modal show';
+      modal.style.display = 'flex';
+      modal.style.zIndex = '99999';
+      modal.innerHTML = `
+        <div class="modal-content survey-modal-content">
+          <div class="modal-header">
+            <h2 id="survey-modal-title"></h2>
+            <button class="modal-close" type="button" onclick="closeSurveyModal()">×</button>
+          </div>
+          <div id="survey-questions" class="survey-questions"></div>
+          <button id="survey-submit-btn" type="button" class="survey-submit-btn" onclick="submitSurvey()"></button>
+        </div>
+      `;
+      document.body.appendChild(modal);
+    }
+
+    const surveyQuestions = document.getElementById('survey-questions');
+    const surveyModalTitle = document.getElementById('survey-modal-title');
+    const surveySubmitBtn = document.getElementById('survey-submit-btn');
+    const questions = CLT_SURVEY_QUESTIONS?.[appState.currentLanguage] || [];
+    const scaleGuide = SURVEY_SCALE_TEXT?.[appState.currentLanguage] || '';
+
+    if (!surveyQuestions || !surveyModalTitle || !surveySubmitBtn) {
+      throw new Error('survey modal structure missing');
+    }
+
+    surveyModalTitle.textContent = appState.currentLanguage === 'zh' ? '用户反馈问卷' : 'User Feedback Survey';
+    surveySubmitBtn.textContent = appState.currentLanguage === 'zh' ? '提交问卷' : 'Submit Survey';
+
+    surveyQuestions.innerHTML = buildSurveyHTML(questions, scaleGuide);
+    modal.classList.remove('hidden');
+    modal.classList.add('show');
     modal.style.display = 'flex';
     modal.style.zIndex = '99999';
-    modal.innerHTML = `
-      <div class="modal-content survey-modal-content">
-        <div class="modal-header">
-          <h2 id="survey-modal-title"></h2>
-          <button class="modal-close" type="button" onclick="closeSurveyModal()">×</button>
-        </div>
-        <div id="survey-questions" class="survey-questions"></div>
-        <button id="survey-submit-btn" type="button" class="survey-submit-btn" onclick="submitSurvey()"></button>
-      </div>
-    `;
-    document.body.appendChild(modal);
+    modal.scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+  } catch (error) {
+    console.error('❌ Failed to open survey modal:', error);
+    alert(appState.currentLanguage === 'zh'
+      ? '问卷打开失败，请刷新后重试。'
+      : 'Failed to open the survey. Please refresh and try again.');
   }
-
-  let surveyQuestions = document.getElementById('survey-questions');
-  let surveyModalTitle = document.getElementById('survey-modal-title');
-  let surveySubmitBtn = document.getElementById('survey-submit-btn');
-  const lang = LANGUAGE_CONFIG[appState.currentLanguage];
-  const questions = CLT_SURVEY_QUESTIONS[appState.currentLanguage];
-  const scaleGuide = SURVEY_SCALE_TEXT[appState.currentLanguage];
-
-  if (!surveyQuestions || !surveyModalTitle || !surveySubmitBtn) {
-    console.error('❌ survey modal structure is missing');
-    alert(appState.currentLanguage === 'zh' ? '问卷弹窗初始化失败，请刷新页面后重试。' : 'Survey modal failed to initialize. Please refresh and try again.');
-    return;
-  }
-  
-  // 更新模态框标题和按钮
-  surveyModalTitle.textContent = appState.currentLanguage === 'zh' ? '用户反馈问卷' : 'User Feedback Survey';
-  surveySubmitBtn.textContent = appState.currentLanguage === 'zh' ? '提交问卷' : 'Submit Survey';
-  
-  surveyQuestions.innerHTML = buildSurveyHTML(questions, scaleGuide);
-  if (!modal) {
-    console.error('❌ survey-modal element not found');
-    return;
-  }
-  modal.classList.remove('hidden');
-  modal.classList.add('show');
-  modal.style.display = 'flex';
-  modal.style.zIndex = '99999';
-  modal.scrollTop = 0;
-  document.body.style.overflow = 'hidden';
 }
 
 function buildSurveyHTML(questions, scaleGuide) {
@@ -538,11 +537,9 @@ function buildSurveyHTML(questions, scaleGuide) {
 }
 
 function renderSurveyQuestion(question) {
-  const labelText = typeof question.text === 'object' ? question.text[appState.currentLanguage] : question.text;
+  const labelText = getQuestionText(question);
   if (question.type === 'single_choice') {
-    const optionList = Array.isArray(question.options)
-      ? question.options
-      : (question.options?.[appState.currentLanguage] || []);
+    const optionList = getQuestionOptions(question);
 
     return `
       <div class="survey-question-card">
@@ -574,6 +571,22 @@ function renderSurveyQuestion(question) {
       </div>
     </div>
   `;
+}
+
+function getQuestionText(question) {
+  if (!question || !question.text) return '';
+  if (typeof question.text === 'string') return question.text;
+  return question.text[appState.currentLanguage] || question.text.zh || question.text.en || '';
+}
+
+function getQuestionOptions(question) {
+  if (!question || !question.options) return [];
+  if (Array.isArray(question.options)) return question.options;
+  const options = question.options[appState.currentLanguage];
+  if (Array.isArray(options)) return options;
+  if (Array.isArray(question.options.zh)) return question.options.zh;
+  if (Array.isArray(question.options.en)) return question.options.en;
+  return [];
 }
 
 function escapeHtml(value) {
@@ -643,7 +656,7 @@ async function submitSurvey() {
   // 检查是否所有问题都已回答
   let unansweredCount = 0;
   actualQuestions.forEach(question => {
-    if (!appState.surveyAnswers[question.id] || appState.surveyAnswers[question.id] === '') {
+    if (appState.surveyAnswers[question.id] === undefined || appState.surveyAnswers[question.id] === null || appState.surveyAnswers[question.id] === '') {
       unansweredCount++;
     }
   });
