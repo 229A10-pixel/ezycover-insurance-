@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLT研究数据后台 - EzyCover</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', Roboto, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .header h1 {
+            color: #0052CC;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .control-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .control-group button {
+            padding: 8px 16px;
+            background: #0052CC;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .control-group button:hover {
+            background: #003d99;
+        }
+
+        .control-group button.danger {
+            background: #FF4444;
+        }
+
+        .control-group button.danger:hover {
+            background: #DD3333;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0052CC;
+        }
+
+        .charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            min-height: 360px;
+        }
+
+        .chart-container h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1rem;
+        }
+
+        .data-table {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            min-height: 260px;
+        }
+
+        .table-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-header h3 {
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e0e0e0;
+            font-size: 0.9rem;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 0.9rem;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #0052CC;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            color: #999;
+            cursor: pointer;
+        }
+
+        .detail-item {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .detail-value {
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .scroll-container {
+            overflow-x: auto;
+            min-height: 180px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>📊 CLT研究数据后台</h1>
+            <p>实时数据采集、分析与导出系统</p>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="controls">
+            <div class="control-group">
+                <label>加载时间筛选：</label>
+                <select id="filterLoadingTime">
+                    <option value="">全部</option>
+                    <option value="1000">1秒</option>
+                    <option value="3000">3秒</option>
+                    <option value="6000">6秒</option>
+                </select>
+
+                <label>保险选择筛选：</label>
+                <select id="filterInsurance">
+                    <option value="">全部</option>
+                    <option value="basic">Basic</option>
+                    <option value="premium">Premium</option>
+                    <option value="luxury">Luxury</option>
+                    <option value="none">None</option>
+                </select>
+
+                <button onclick="applyFilters()">应用筛选</button>
+                <button onclick="resetFilters()">重置</button>
+                <button onclick="manualRefresh()">🔄 手动刷新</button>
+                <button onclick="exportData()">导出CSV</button>
+                <button class="danger" onclick="clearData()">清空数据</button>
+            </div>
+            <div style="margin-top: 10px; font-size: 0.85rem; color: #666;">
+                ✅ 实时同步已启用 - 数据会自动刷新显示
+            </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats">
+            <div class="stat-card">
+                <h3>总记录数</h3>
+                <div class="value" id="totalRecords">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>平均加载时间</h3>
+                <div class="value" id="avgLoadingTime">0ms</div>
+            </div>
+            <div class="stat-card">
+                <h3>平均量表分</h3>
+                <div class="value" id="avgScaleScore">0.0</div>
+            </div>
+        </div>
+
+        <!-- 图表 -->
+        <div class="charts">
+            <div class="chart-container">
+                <h3>保险等级选择分布</h3>
+                <canvas id="insuranceChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>量表维度平均分</h3>
+                <canvas id="scaleChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>加载时间分布</h3>
+                <canvas id="loadingTimeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="data-table">
+            <div class="table-header">
+                <h3>数据列表</h3>
+            </div>
+            <div class="scroll-container">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>user_id</th>
+                            <th>loading_time</th>
+                            <th>出发地</th>
+                            <th>目的地</th>
+                            <th>出行日期</th>
+                            <th>insurance_choice</th>
+                            <th>gender</th>
+                            <th>age</th>
+                            <th>edu</th>
+                            <th>travel_exp</th>
+                            <th>time1</th>
+                            <th>time2</th>
+                            <th>time3</th>
+                            <th>space1</th>
+                            <th>space2</th>
+                            <th>space3</th>
+                            <th>social1</th>
+                            <th>social2</th>
+                            <th>social3</th>
+                            <th>hypo1</th>
+                            <th>hypo2</th>
+                            <th>hypo3</th>
+                            <th>speed1</th>
+                            <th>speed2</th>
+                            <th>speed3</th>
+                            <th>cl1</th>
+                            <th>cl2</th>
+                            <th>cl3</th>
+                            <th>int1</th>
+                            <th>int2</th>
+                            <th>int3</th>
+                            <th>wtp1</th>
+                            <th>wtp2</th>
+                            <th>wtp3</th>
+                            <th>submit_time</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="33" class="no-data">暂无数据</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 详情弹窗 -->
+    <div class="modal" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>数据详情</h2>
+                <button class="modal-close" onclick="closeDetailModal()">×</button>
+            </div>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <script src="config-v3.js?v=20260414"></script>
+    <script src="data-manager.js?v=20260414"></script>
+    <script>
+        // ============================================
+        // ☁️ Supabase 直接读取（绕过 dataManager）
+        // ============================================
+        const ADMIN_SUPABASE_URL = 'https://exeelpqkgdzsbakmazoy.supabase.co';
+        const ADMIN_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZWVscHFrZ2R6c2Jha21hem95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4Njg4MTAsImV4cCI6MjA5MDQ0NDgxMH0.9P5-Y1tAV_z30jI3craDSyb3a5sK6-zXw3cjOLF99qM';
+        const ADMIN_DATA_TABLE = 'clt_research_data';
+
+        function adminGetHeaders() {
+            return {
+                apikey: ADMIN_SUPABASE_KEY,
+                Authorization: `Bearer ${ADMIN_SUPABASE_KEY}`,
+                'Content-Type': 'application/json'
+            };
+        }
+
+        function adminMapRow(row) {
+            return {
+                id: row.id,
+                user_id: row.user_id || row.session_id,
+                sessionId: row.user_id || row.session_id,
+                loading_time: row.loading_time ?? row.response_time,
+                responseTime: row.loading_time ?? row.response_time,
+                language: row.language,
+                insurance_choice: row.insurance_choice,
+                departure: row.departure,
+                destination: row.destination,
+                travel_date: row.travel_date,
+                gender: row.gender,
+                age: row.age,
+                edu: row.edu,
+                travel_exp: row.travel_exp,
+                time1: row.time1, time2: row.time2, time3: row.time3,
+                space1: row.space1, space2: row.space2, space3: row.space3,
+                social1: row.social1, social2: row.social2, social3: row.social3,
+                hypo1: row.hypo1, hypo2: row.hypo2, hypo3: row.hypo3,
+                speed1: row.speed1, speed2: row.speed2, speed3: row.speed3,
+                cl1: row.cl1, cl2: row.cl2, cl3: row.cl3,
+                int1: row.int1, int2: row.int2, int3: row.int3,
+                wtp1: row.wtp1, wtp2: row.wtp2, wtp3: row.wtp3,
+                submit_time: row.submit_time || row.client_timestamp,
+                timestamp: row.client_timestamp,
+                clientTimestamp: row.client_timestamp,
+                created_at: row.created_at
+            };
+        }
+
+        async function adminLoadFromSupabase(filters = {}) {
+            try {
+                let url = `${ADMIN_SUPABASE_URL}/rest/v1/${ADMIN_DATA_TABLE}?select=*&order=client_timestamp.desc`;
+                const params = [];
+                if (filters.loading_time) {
+                    params.push(`loading_time=eq.${filters.loading_time}`);
+                }
+                if (filters.insurance_choice) {
+                    params.push(`insurance_choice=eq.${filters.insurance_choice}`);
+                }
+                if (params.length > 0) {
+                    url += '&' + params.join('&');
+                }
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: adminGetHeaders()
+                });
+                if (!response.ok) {
+                    const err = await response.text();
+                    console.error('❌ Admin load failed:', response.status, err);
+                    return [];
+                }
+                const rows = await response.json();
+                console.log('📥 Admin loaded', rows.length, 'records from Supabase');
+                return Array.isArray(rows) ? rows.map(adminMapRow) : [];
+            } catch (error) {
+                console.error('❌ Admin load error:', error);
+                return [];
+            }
+        }
+
+        async function adminDeleteRecord(recordKey) {
+            if (!recordKey) return false;
+            if (!confirm(`确定要删除这条记录吗？\n${recordKey}`)) return false;
+            try {
+                const response = await fetch(
+                    `${ADMIN_SUPABASE_URL}/rest/v1/${ADMIN_DATA_TABLE}?user_id=eq.${encodeURIComponent(recordKey)}`,
+                    {
+                        method: 'DELETE',
+                        headers: adminGetHeaders()
+                    }
+                );
+                if (!response.ok) {
+                    const err = await response.text();
+                    throw new Error(err);
+                }
+                return true;
+            } catch (error) {
+                console.error('❌ Admin delete error:', error);
+                return false;
+            }
+        }
+
+        function adminExportCSV(data) {
+            if (!data || data.length === 0) {
+                alert('没有数据可导出');
+                return;
+            }
+            const headers = [
+                'user_id','loading_time','insurance_choice','departure','destination','travel_date',
+                'gender','age','edu','travel_exp',
+                'time1','time2','time3','space1','space2','space3',
+                'social1','social2','social3','hypo1','hypo2','hypo3',
+                'speed1','speed2','speed3','cl1','cl2','cl3',
+                'int1','int2','int3','wtp1','wtp2','wtp3',
+                'submit_time'
+            ];
+            const rows = data.map(d => [
+                d.user_id || d.sessionId || d.id || '',
+                d.loading_time ?? d.responseTime ?? '',
+                d.insurance_choice || '',
+                d.departure || '', d.destination || '', d.travel_date || '',
+                d.gender || '', d.age || '', d.edu || '', d.travel_exp || '',
+                d.time1||'', d.time2||'', d.time3||'',
+                d.space1||'', d.space2||'', d.space3||'',
+                d.social1||'', d.social2||'', d.social3||'',
+                d.hypo1||'', d.hypo2||'', d.hypo3||'',
+                d.speed1||'', d.speed2||'', d.speed3||'',
+                d.cl1||'', d.cl2||'', d.cl3||'',
+                d.int1||'', d.int2||'', d.int3||'',
+                d.wtp1||'', d.wtp2||'', d.wtp3||'',
+                d.submit_time || d.timestamp || d.clientTimestamp || ''
+            ]);
+            const escape = v => `"${(v===null||v===undefined?'':String(v)).replace(/"/g,'""').replace(/\r?\n/g,' ')}"`;
+            let csv = headers.join(',') + '\r\n';
+            rows.forEach(r => { csv += r.map(escape).join(',') + '\r\n'; });
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `CLT_Research_Data_55_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+        }
+
+        async function adminClearAllData() {
+            if (!confirm('确定要清空所有数据吗？此操作不可撤销。')) return;
+            try {
+                const response = await fetch(
+                    `${ADMIN_SUPABASE_URL}/rest/v1/${ADMIN_DATA_TABLE}?id=gt.0`,
+                    { method: 'DELETE', headers: adminGetHeaders() }
+                );
+                if (!response.ok) throw new Error(await response.text());
+                alert('数据已清空');
+            } catch (error) {
+                console.error('❌ Clear error:', error);
+                alert('清空失败');
+            }
+        }
+    </script>
+    <script>
+        let currentData = [];
+        let insuranceChart = null;
+        let scaleChart = null;
+        let loadingTimeChart = null;
+        let lastDataCount = 0;
+        let lastDataSignature = '';
+        let unsubscribe = null;
+
+        // 加载数据
+        async function loadData(filters = {}) {
+            currentData = await adminLoadFromSupabase(filters);
+        }
+
+        // 初始化
+        async function init() {
+            console.log('🚀 Admin dashboard initializing...');
+            await loadData();
+            lastDataSignature = getDataSignature(currentData);
+            console.log('📥 Data loaded:', currentData.length, 'records');
+            updateStatistics();
+            renderCharts();
+            renderTable();
+            console.log('✅ Admin dashboard initialized');
+        }
+
+        function getDataSignature(data) {
+            return JSON.stringify((data || []).slice().sort((a, b) => {
+                const ak = a.user_id || a.sessionId || a.id || '';
+                const bk = b.user_id || b.sessionId || b.id || '';
+                return ak.localeCompare(bk);
+            }).map(item => [
+                item.user_id || item.sessionId || item.id || '',
+                item.loading_time ?? item.responseTime ?? '',
+                item.insurance_choice || '',
+                item.gender || '',
+                item.age || '',
+                item.edu || '',
+                item.travel_exp || '',
+                item.submit_time || item.timestamp || item.clientTimestamp || item.created_at || ''
+            ]));
+        }
+
+        function applyIncomingData(newData, options = {}) {
+            const force = options.force === true;
+            if (!force && Array.isArray(newData) && newData.length === 0 && currentData.length > 0) {
+                console.warn('⚠️ Ignoring empty refresh to prevent flicker');
+                return;
+            }
+
+            const signature = getDataSignature(newData);
+            if (signature === lastDataSignature) return;
+            lastDataSignature = signature;
+            currentData = newData;
+            lastDataCount = newData.length;
+            updateStatistics();
+            renderCharts();
+            renderTable();
+        }
+
+        // 应用筛选
+        async function applyFilters() {
+            const filters = {
+                loading_time: parseInt(document.getElementById('filterLoadingTime').value) || null,
+                insurance_choice: document.getElementById('filterInsurance').value || null
+            };
+            await loadData(filters);
+            applyIncomingData(currentData, { force: true });
+        }
+
+        // 重置筛选
+        async function resetFilters() {
+            document.getElementById('filterLoadingTime').value = '';
+            document.getElementById('filterInsurance').value = '';
+            await loadData();
+            applyIncomingData(currentData, { force: true });
+        }
+
+        // 手动刷新
+        async function manualRefresh() {
+            console.log('手动刷新数据');
+            await loadData();
+            applyIncomingData(currentData, { force: true });
+            alert('数据已刷新，共 ' + currentData.length + ' 条');
+        }
+
+        // 更新统计
+        async function updateStatistics() {
+            const stats = calculateCurrentStatistics(currentData);
+            document.getElementById('totalRecords').textContent = currentData.length;
+            document.getElementById('avgLoadingTime').textContent = (stats.avgLoadingTime || 0).toFixed(0) + 'ms';
+            document.getElementById('avgScaleScore').textContent = (stats.avgScaleScore || 0).toFixed(2);
+        }
+
+        function calculateCurrentStatistics(data) {
+            const scaleFields = [
+                'time1', 'time2', 'time3',
+                'space1', 'space2', 'space3',
+                'social1', 'social2', 'social3',
+                'hypo1', 'hypo2', 'hypo3',
+                'speed1', 'speed2', 'speed3',
+                'cl1', 'cl2', 'cl3',
+                'int1', 'int2', 'int3',
+                'wtp1', 'wtp2', 'wtp3'
+            ];
+
+            const scaleValues = data.flatMap(item => scaleFields.map(field => Number(item[field]) || 0)).filter(v => v > 0);
+            const loadingTimes = data.map(item => Number(item.loading_time ?? item.responseTime) || 0).filter(v => v > 0);
+
+            return {
+                avgLoadingTime: loadingTimes.reduce((sum, value) => sum + value, 0) / loadingTimes.length || 0,
+                avgScaleScore: scaleValues.reduce((sum, value) => sum + value, 0) / scaleValues.length || 0
+            };
+        }
+
+        // 渲染图表
+        function renderCharts() {
+            renderInsuranceChart();
+            renderScaleChart();
+            renderLoadingTimeChart();
+        }
+
+        // 保险选择分布图
+        function renderInsuranceChart() {
+            const distribution = {};
+            currentData.forEach(d => {
+                distribution[d.insurance_choice] = (distribution[d.insurance_choice] || 0) + 1;
+            });
+
+            const ctx = document.getElementById('insuranceChart').getContext('2d');
+            if (insuranceChart) insuranceChart.destroy();
+
+            insuranceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(distribution).filter(Boolean),
+                    datasets: [{
+                        label: '选择数量',
+                        data: Object.entries(distribution).filter(([key]) => key).map(([, value]) => value),
+                        backgroundColor: '#0052CC',
+                        borderColor: '#003d99',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function calculateDimensionAverages(data) {
+            const groups = {
+                time: ['time1', 'time2', 'time3'],
+                space: ['space1', 'space2', 'space3'],
+                social: ['social1', 'social2', 'social3'],
+                hypo: ['hypo1', 'hypo2', 'hypo3'],
+                speed: ['speed1', 'speed2', 'speed3'],
+                cl: ['cl1', 'cl2', 'cl3'],
+                int: ['int1', 'int2', 'int3'],
+                wtp: ['wtp1', 'wtp2', 'wtp3']
+            };
+
+            return Object.entries(groups).map(([label, fields]) => {
+                const values = data.flatMap(item => fields.map(field => Number(item[field]) || 0)).filter(v => v > 0);
+                const avg = values.reduce((sum, value) => sum + value, 0) / values.length || 0;
+                return { label, avg };
+            });
+        }
+
+        function renderScaleChart() {
+            const averages = calculateDimensionAverages(currentData);
+            const ctx = document.getElementById('scaleChart').getContext('2d');
+            if (scaleChart) scaleChart.destroy();
+
+            scaleChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: averages.map(item => item.label),
+                    datasets: [{
+                        label: '平均分',
+                        data: averages.map(item => item.avg.toFixed(2)),
+                        backgroundColor: '#165DFF',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, max: 5 } }
+                }
+            });
+        }
+
+        function renderLoadingTimeChart() {
+            const distribution = { '1s': 0, '3s': 0, '6s': 0 };
+            currentData.forEach(d => {
+                const value = Number(d.loading_time ?? d.responseTime);
+                if (value === 1000) distribution['1s'] += 1;
+                else if (value === 3000) distribution['3s'] += 1;
+                else if (value === 6000) distribution['6s'] += 1;
+            });
+
+            const ctx = document.getElementById('loadingTimeChart').getContext('2d');
+            if (loadingTimeChart) loadingTimeChart.destroy();
+
+            loadingTimeChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(distribution),
+                    datasets: [{
+                        data: Object.values(distribution),
+                        backgroundColor: ['#165DFF', '#00B42A', '#FF9500']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        // 渲染表格
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            if (currentData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="36" class="no-data">暂无数据</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = currentData.map(d => `
+                <tr>
+                    <td>${d.user_id || d.sessionId || '-'}</td>
+                    <td>${d.loading_time ?? d.responseTime ?? '-'}</td>
+                    <td>${d.departure || '-'}</td>
+                    <td>${d.destination || '-'}</td>
+                    <td>${d.travel_date || '-'}</td>
+                    <td>${d.insurance_choice || '-'}</td>
+                    <td>${d.gender || '-'}</td>
+                    <td>${d.age || '-'}</td>
+                    <td>${d.edu || '-'}</td>
+                    <td>${d.travel_exp || '-'}</td>
+                    <td>${d.time1 || '-'}</td>
+                    <td>${d.time2 || '-'}</td>
+                    <td>${d.time3 || '-'}</td>
+                    <td>${d.space1 || '-'}</td>
+                    <td>${d.space2 || '-'}</td>
+                    <td>${d.space3 || '-'}</td>
+                    <td>${d.social1 || '-'}</td>
+                    <td>${d.social2 || '-'}</td>
+                    <td>${d.social3 || '-'}</td>
+                    <td>${d.hypo1 || '-'}</td>
+                    <td>${d.hypo2 || '-'}</td>
+                    <td>${d.hypo3 || '-'}</td>
+                    <td>${d.speed1 || '-'}</td>
+                    <td>${d.speed2 || '-'}</td>
+                    <td>${d.speed3 || '-'}</td>
+                    <td>${d.cl1 || '-'}</td>
+                    <td>${d.cl2 || '-'}</td>
+                    <td>${d.cl3 || '-'}</td>
+                    <td>${d.int1 || '-'}</td>
+                    <td>${d.int2 || '-'}</td>
+                    <td>${d.int3 || '-'}</td>
+                    <td>${d.wtp1 || '-'}</td>
+                    <td>${d.wtp2 || '-'}</td>
+                    <td>${d.wtp3 || '-'}</td>
+                    <td>${formatTimestamp(d.submit_time || d.timestamp || d.clientTimestamp || d.created_at)}</td>
+                    <td>
+                        <button onclick="showDetail('${(d.user_id || d.sessionId || '').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: #0052CC; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 6px;">查看</button>
+                        <button onclick="deleteRecord('${(d.user_id || d.sessionId || '').replace(/'/g, "\\'")}')" style="padding: 4px 8px; background: #E53935; color: white; border: none; border-radius: 4px; cursor: pointer;">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function formatSessionId(sessionId) {
+            if (!sessionId) return '-';
+            return sessionId.length > 20 ? `${sessionId.slice(0, 20)}...` : sessionId;
+        }
+
+        function formatDecisionTime(value) {
+            const numericValue = Number(value);
+            return Number.isFinite(numericValue) ? `${numericValue.toFixed(1)}s` : '-';
+        }
+
+        function formatTimestamp(value) {
+            if (!value) return '-';
+            const date = new Date(value);
+            return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString();
+        }
+
+        // 显示详情
+        function showDetail(sessionId) {
+            const data = currentData.find(d => (d.user_id || d.sessionId) === sessionId);
+            if (!data) return;
+
+            const html = `
+                <div class="detail-item">
+                    <div class="detail-label">user_id</div>
+                    <div class="detail-value">${data.user_id || data.sessionId}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">loading_time</div>
+                    <div class="detail-value">${data.loading_time ?? data.responseTime ?? '-'}ms</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">旅游选择</div>
+                    <div class="detail-value">出发地: ${data.departure || '-'} → 目的地: ${data.destination || '-'} | 出行日期: ${data.travel_date || '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">insurance_choice</div>
+                    <div class="detail-value">${data.insurance_choice || '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">gender</div>
+                    <div class="detail-value">${data.gender || '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">age</div>
+                    <div class="detail-value">${data.age || '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">edu</div>
+                    <div class="detail-value">${data.edu || '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">travel_exp</div>
+                    <div class="detail-value">${data.travel_exp || '-'}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">time1/time2/time3</div>
+                    <div class="detail-value">${[data.time1, data.time2, data.time3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">space1/space2/space3</div>
+                    <div class="detail-value">${[data.space1, data.space2, data.space3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">social1/social2/social3</div>
+                    <div class="detail-value">${[data.social1, data.social2, data.social3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">hypo1/hypo2/hypo3</div>
+                    <div class="detail-value">${[data.hypo1, data.hypo2, data.hypo3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">speed1/speed2/speed3</div>
+                    <div class="detail-value">${[data.speed1, data.speed2, data.speed3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">cl1/cl2/cl3</div>
+                    <div class="detail-value">${[data.cl1, data.cl2, data.cl3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">int1/int2/int3</div>
+                    <div class="detail-value">${[data.int1, data.int2, data.int3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">wtp1/wtp2/wtp3</div>
+                    <div class="detail-value">${[data.wtp1, data.wtp2, data.wtp3].join(' / ')}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">submit_time</div>
+                    <div class="detail-value">${formatTimestamp(data.submit_time || data.timestamp || data.clientTimestamp || data.created_at)}</div>
+                </div>
+            `;
+
+            document.getElementById('detailContent').innerHTML = html;
+            document.getElementById('detailModal').classList.add('show');
+        }
+
+        // 关闭详情弹窗
+        function closeDetailModal() {
+            document.getElementById('detailModal').classList.remove('show');
+        }
+
+        // 删除单条记录
+        async function deleteRecord(recordKey) {
+            const success = await adminDeleteRecord(recordKey);
+            if (success) {
+                await loadData();
+                applyIncomingData(currentData, { force: true });
+                alert('记录已删除');
+            } else {
+                alert('删除失败');
+            }
+        }
+
+        // 导出数据
+        function exportData() {
+            adminExportCSV(currentData);
+        }
+
+        // 清空数据
+        async function clearData() {
+            await adminClearAllData();
+            await loadData();
+            applyIncomingData(currentData, { force: true });
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
