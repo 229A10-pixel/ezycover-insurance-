@@ -1,24 +1,74 @@
 /**
- * CLT研究数据管理系统 V2
+ * CLT研究数据管理系统 V3 (Firebase 版)
  * 负责采集、存储、管理和导出实验数据
- * 支持多设备实时同步（使用 Supabase）
+ * 支持多设备实时同步（使用 Firebase Firestore）
  */
 
 // ============================================
-// ☁️ Supabase 配置（多设备数据同步）
+// ☁️ Firebase 配置
 // ============================================
 
-const SUPABASE_URL = 'https://exeelpqkgdzsbakmazoy.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZWVscHFrZ2R6c2Jha21hem95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4Njg4MTAsImV4cCI6MjA5MDQ0NDgxMH0.9P5-Y1tAV_z30jI3craDSyb3a5sK6-zXw3cjOLF99qM';
+const firebaseConfig = {
+  apiKey: "AIzaSyBGi7uyQkCoyIoXGKIcCdDXojgwQ0pl2nY",
+  authDomain: "clt-research-website.firebaseapp.com",
+  projectId: "clt-research-website",
+  storageBucket: "clt-research-website.firebasestorage.app",
+  messagingSenderId: "71205781808",
+  appId: "1:71205781808:web:9ec2aa427a1a6e11efc8f5"
+};
 
-let useFirebase = false;
-let pendingData = [];
+// ============================================
+// 📦 Firebase SDK 初始化状态
+// ============================================
+
 let firebaseInitialized = false;
+let firestoreDb = null;
+let useFirebase = false;
+
+function checkFirebaseAvailable() {
+  return typeof firebase !== 'undefined' && firebase.apps;
+}
+
+async function initializeFirebase() {
+  if (firebaseInitialized) return useFirebase;
+
+  loadPendingDataFromStorage();
+  clearLegacyBackupData();
+
+  if (!checkFirebaseAvailable()) {
+    console.warn('⚠️ Firebase SDK not loaded. Falling back to localStorage only.');
+    useFirebase = false;
+    firebaseInitialized = true;
+    return false;
+  }
+
+  try {
+    if (firebase.apps.length === 0) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    firestoreDb = firebase.firestore();
+    await firestoreDb.enablePersistence({ synchronizeTabs: true });
+    useFirebase = true;
+    console.log('✅ Firebase Firestore initialized - Multi-device sync enabled');
+    syncPendingData();
+  } catch (error) {
+    console.error('❌ Firebase init error:', error);
+    useFirebase = false;
+  }
+
+  firebaseInitialized = true;
+  return useFirebase;
+}
+
+// ============================================
+// 📦 本地离线队列
+// ============================================
+
 const PENDING_DATA_KEY = 'clt_pending_sync_data';
-const DATA_TABLE = 'clt_research_data';
-const SETTINGS_TABLE = 'experiment_settings';
 const RESEARCH_DATA_KEY = 'clt_research_data_v2';
 const LEGACY_RESEARCH_DATA_KEY = 'clt_research_data';
+
+let pendingData = [];
 
 function loadPendingDataFromStorage() {
   try {
@@ -47,6 +97,11 @@ function queuePendingData(data) {
   }
 }
 
+function removePendingData(sessionId) {
+  pendingData = pendingData.filter(item => getRecordKey(item) !== sessionId);
+  persistPendingData();
+}
+
 function clearLegacyBackupData() {
   try {
     localStorage.removeItem(LEGACY_RESEARCH_DATA_KEY);
@@ -55,175 +110,226 @@ function clearLegacyBackupData() {
   }
 }
 
-function withTimeout(promise, timeoutMs, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs);
-    })
-  ]);
+// ============================================
+// 🗂️ Firestore Collection 名称
+// ============================================
+
+const DATA_COLLECTION = 'clt_research_data';
+const SETTINGS_DOC = 'experiment_settings';
+
+// ============================================
+// 🔑 记录主键
+// ============================================
+
+function getRecordKey(record) {
+  return record?.user_id || record?.sessionId || record?.id || '';
 }
 
-function getSupabaseHeaders(prefer) {
-  const headers = {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    'Content-Type': 'application/json'
-  };
-  if (prefer) {
-    headers.Prefer = prefer;
-  }
-  return headers;
-}
+// ============================================
+// ☁️ Firestore 数据操作
+// ============================================
 
-function mapRowToRecord(row) {
-  return {
-    id: row.id,
-    user_id: row.user_id || row.session_id,
-    sessionId: row.user_id || row.session_id,
-    loading_time: row.loading_time ?? row.response_time,
-    responseTime: row.loading_time ?? row.response_time,
-    language: row.language,
-    insurance_choice: row.insurance_choice,
-    departure: row.departure,
-    destination: row.destination,
-    travel_date: row.travel_date,
-    gender: row.gender,
-    age: row.age,
-    edu: row.edu,
-    travel_exp: row.travel_exp,
-    time1: row.time1,
-    time2: row.time2,
-    time3: row.time3,
-    space1: row.space1,
-    space2: row.space2,
-    space3: row.space3,
-    social1: row.social1,
-    social2: row.social2,
-    social3: row.social3,
-    hypo1: row.hypo1,
-    hypo2: row.hypo2,
-    hypo3: row.hypo3,
-    speed1: row.speed1,
-    speed2: row.speed2,
-    speed3: row.speed3,
-    cl1: row.cl1,
-    cl2: row.cl2,
-    cl3: row.cl3,
-    int1: row.int1,
-    int2: row.int2,
-    int3: row.int3,
-    wtp1: row.wtp1,
-    wtp2: row.wtp2,
-    wtp3: row.wtp3,
-    submit_time: row.submit_time || row.client_timestamp,
-    timestamp: row.client_timestamp,
-    clientTimestamp: row.client_timestamp,
-    created_at: row.created_at
-  };
-}
+async function saveToFirestore(data) {
+  if (!useFirebase || !firestoreDb) return false;
 
-function mapRecordToRow(data) {
-  return {
-    user_id: data.user_id || data.sessionId,
-    session_id: data.user_id || data.sessionId,
-    loading_time: data.loading_time ?? data.responseTime ?? null,
-    language: data.language || null,
-    insurance_choice: data.insurance_choice,
-    departure: data.departure || '',
-    destination: data.destination || '',
-    travel_date: data.travel_date || '',
-    gender: data.gender || '',
-    age: data.age || '',
-    edu: data.edu || '',
-    travel_exp: data.travel_exp || '',
-    time1: data.time1 || '',
-    time2: data.time2 || '',
-    time3: data.time3 || '',
-    space1: data.space1 || '',
-    space2: data.space2 || '',
-    space3: data.space3 || '',
-    social1: data.social1 || '',
-    social2: data.social2 || '',
-    social3: data.social3 || '',
-    hypo1: data.hypo1 || '',
-    hypo2: data.hypo2 || '',
-    hypo3: data.hypo3 || '',
-    speed1: data.speed1 || '',
-    speed2: data.speed2 || '',
-    speed3: data.speed3 || '',
-    cl1: data.cl1 || '',
-    cl2: data.cl2 || '',
-    cl3: data.cl3 || '',
-    int1: data.int1 || '',
-    int2: data.int2 || '',
-    int3: data.int3 || '',
-    wtp1: data.wtp1 || '',
-    wtp2: data.wtp2 || '',
-    wtp3: data.wtp3 || '',
-    submit_time: data.submit_time || data.timestamp || new Date().toISOString(),
-    client_timestamp: data.timestamp || new Date().toISOString()
-  };
-}
+  const recordKey = getRecordKey(data);
+  const docRef = firestoreDb.collection(DATA_COLLECTION).doc(recordKey);
 
-async function saveToSupabase(data) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/${DATA_TABLE}?on_conflict=user_id`,
-      {
-        method: 'POST',
-        headers: getSupabaseHeaders('resolution=merge-duplicates,return=representation'),
-        body: JSON.stringify(mapRecordToRow(data)),
-        signal: controller.signal
+    await docRef.set(data, { merge: true });
+    console.log('✅ Data saved to Firestore:', recordKey);
+    return true;
+  } catch (error) {
+    console.error('❌ Firestore save error:', error);
+    return false;
+  }
+}
+
+async function loadFromFirestore() {
+  if (!useFirebase || !firestoreDb) return [];
+
+  try {
+    const snapshot = await firestoreDb.collection(DATA_COLLECTION)
+      .orderBy('submit_time', 'desc')
+      .get();
+
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      data.id = doc.id;
+      return data;
+    });
+  } catch (error) {
+    console.error('❌ Firestore load error:', error);
+    return [];
+  }
+}
+
+function listenToFirestore(callback) {
+  if (!useFirebase || !firestoreDb) return null;
+
+  console.log('👂 Firestore real-time listener started');
+  let unsubscribe = null;
+
+  unsubscribe = firestoreDb.collection(DATA_COLLECTION)
+    .orderBy('submit_time', 'desc')
+    .onSnapshot(
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => {
+          const d = doc.data();
+          d.id = doc.id;
+          return d;
+        });
+        callback(data);
+      },
+      (error) => {
+        console.error('❌ Firestore listener error:', error);
       }
     );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Supabase payload:', JSON.stringify(mapRecordToRow(data)));
-      throw new Error(`Supabase save failed: ${response.status} ${errorText}`);
+  return () => {
+    if (unsubscribe) {
+      unsubscribe();
+      console.log('🔇 Firestore listener stopped');
     }
+  };
+}
 
-    console.log('✅ Data saved to Supabase:', getRecordKey(data));
+async function clearFirestoreData() {
+  if (!useFirebase || !firestoreDb) return;
+
+  try {
+    const snapshot = await firestoreDb.collection(DATA_COLLECTION).get();
+    const batch = firestoreDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    console.log('✅ All cloud data cleared');
+  } catch (error) {
+    console.error('❌ Error clearing cloud data:', error);
+  }
+}
+
+async function deleteFirestoreRecord(recordKey) {
+  if (!useFirebase || !firestoreDb) return false;
+
+  try {
+    await firestoreDb.collection(DATA_COLLECTION).doc(recordKey).delete();
+    console.log('✅ Firestore record deleted:', recordKey);
     return true;
   } catch (error) {
-    console.error('❌ Supabase save error:', error);
+    console.error('❌ Error deleting Firestore record:', error);
     return false;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
-async function loadFromSupabase() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+// ============================================
+// 🔄 离线队列同步
+// ============================================
+
+async function syncPendingData() {
+  if (!useFirebase || pendingData.length === 0) return;
+
+  console.log(`📤 Syncing ${pendingData.length} pending records to cloud...`);
+  const queuedItems = [...pendingData];
+
+  for (const data of queuedItems) {
+    const saved = await saveToFirestore(data);
+    if (saved) {
+      removePendingData(getRecordKey(data));
+    }
+  }
+
+  console.log(`✅ Pending sync complete. ${pendingData.length} records remaining.`);
+}
+
+async function saveToFirestoreWithRetry(data, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const saved = await saveToFirestore(data);
+    if (saved) return true;
+    if (attempt < retries) {
+      console.warn(`⚠️ Firestore save retry ${attempt}/${retries - 1} for`, getRecordKey(data));
+      await new Promise(resolve => setTimeout(resolve, attempt * 1200));
+    }
+  }
+  return false;
+}
+
+// ============================================
+// ⚙️ 实验设置同步
+// ============================================
+
+async function saveSettingsToFirestore(settings) {
+  localStorage.setItem('experiment_settings', JSON.stringify(settings));
+  if (!useFirebase || !firestoreDb) return false;
+
   try {
-    const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/${DATA_TABLE}?select=*&order=client_timestamp.desc`,
-      { headers: getSupabaseHeaders(), signal: controller.signal }
+    await firestoreDb.collection(SETTINGS_DOC).doc('main').set({
+      responseTime: settings.responseTime ?? null,
+      language: settings.language ?? null,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    console.log('✅ Settings saved to Firestore:', settings);
+    return true;
+  } catch (error) {
+    console.error('❌ Error saving settings:', error);
+    return false;
+  }
+}
+
+async function loadSettingsFromFirestore() {
+  const localSettings = JSON.parse(localStorage.getItem('experiment_settings') || 'null');
+  if (!useFirebase || !firestoreDb) return localSettings;
+
+  try {
+    const doc = await firestoreDb.collection(SETTINGS_DOC).doc('main').get();
+    if (doc.exists) {
+      const data = doc.data();
+      const settings = {
+        responseTime: data.responseTime,
+        language: data.language
+      };
+      console.log('✅ Settings loaded from Firestore:', settings);
+      return settings;
+    }
+  } catch (error) {
+    console.error('❌ Error loading settings:', error);
+  }
+  return localSettings;
+}
+
+function listenToSettingsChanges(callback) {
+  if (!useFirebase || !firestoreDb) return null;
+
+  let lastSerialized = null;
+  let unsubscribe = null;
+
+  unsubscribe = firestoreDb.collection(SETTINGS_DOC).doc('main')
+    .onSnapshot(
+      (doc) => {
+        if (doc.exists) {
+          const settings = doc.data();
+          const serialized = JSON.stringify(settings);
+          if (serialized !== lastSerialized) {
+            lastSerialized = serialized;
+            callback({
+              responseTime: settings.responseTime,
+              language: settings.language
+            });
+          }
+        }
+      },
+      (error) => {
+        console.error('❌ Settings listener error:', error);
+      }
     );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Supabase load failed: ${response.status} ${errorText}`);
-    }
-
-    const result = await response.json();
-    return Array.isArray(result) ? result.map(mapRowToRecord) : [];
-  } catch (error) {
-    console.error('❌ Supabase load error:', error);
-    return [];
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return () => {
+    if (unsubscribe) unsubscribe();
+  };
 }
 
-function removePendingData(sessionId) {
-  pendingData = pendingData.filter(item => getRecordKey(item) !== sessionId);
-  persistPendingData();
-}
+// ============================================
+// 🛠️ 辅助函数
+// ============================================
 
 function escapeCsvCell(value) {
   const text = value === null || value === undefined ? '' : String(value);
@@ -244,187 +350,16 @@ function mergeDataSets(primary = [], secondary = []) {
   return merged;
 }
 
-function getRecordKey(record) {
-  return record?.user_id || record?.sessionId || record?.id || '';
-}
-
-function initializeFirebase() {
-  if (firebaseInitialized) return useFirebase;
-  loadPendingDataFromStorage();
-  clearLegacyBackupData();
-  useFirebase = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-  firebaseInitialized = true;
-  if (useFirebase) {
-    console.log('✅ Supabase initialized successfully - Multi-device sync enabled');
-    syncPendingData();
-  } else {
-    console.warn('⚠️ Supabase not configured, falling back to localStorage only');
-  }
-  return useFirebase;
-}
-
-async function syncPendingData() {
-  if (!useFirebase || pendingData.length === 0) return;
-  console.log(`📤 Syncing ${pendingData.length} pending records to cloud...`);
-  const queuedItems = [...pendingData];
-  for (const data of queuedItems) {
-    const saved = await saveToSupabase(data);
-    if (saved) {
-      removePendingData(getRecordKey(data));
-    }
-  }
-  console.log(`✅ Pending sync complete. ${pendingData.length} records remaining.`);
-}
-
-async function saveToFirestoreWithRetry(data, retries = 3) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const saved = await saveToSupabase(data);
-    if (saved) {
-      return true;
-    }
-    if (attempt < retries) {
-      console.warn(`⚠️ Firestore save retry ${attempt}/${retries - 1} for`, getRecordKey(data));
-      await new Promise(resolve => setTimeout(resolve, attempt * 1200));
-    }
-  }
-  return false;
-}
-
-async function saveToFirestore(data) {
-  return await saveToSupabase(data);
-}
-
-async function loadFromFirestore() {
-  return await loadFromSupabase();
-}
-
-function listenToFirestore(callback) {
-  if (!useFirebase) return null;
-  console.log('👂 Cloud polling listener started');
-  let active = true;
-
-  const poll = async () => {
-    if (!active) return;
-    const data = await loadFromSupabase();
-    callback(data);
-  };
-
-  poll();
-  const intervalId = setInterval(poll, 3000);
-  return () => {
-    active = false;
-    clearInterval(intervalId);
-  };
-}
-
-async function clearFirestoreData() {
-  if (!useFirebase) return;
-  try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${DATA_TABLE}?id=gt.0`, {
-      method: 'DELETE',
-      headers: getSupabaseHeaders(),
-    });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText);
-    }
-    console.log('✅ All cloud data cleared');
-  } catch (error) {
-    console.error('❌ Error clearing cloud data:', error);
-  }
-}
-
-// ============================================
-// ⚙️ 实验设置同步（跨设备）
-// ============================================
-
-async function saveSettingsToFirestore(settings) {
-  localStorage.setItem('experiment_settings', JSON.stringify(settings));
-  if (!useFirebase) return false;
-  try {
-    const existingSettings = await loadSettingsFromFirestore();
-    const payload = {
-      settings_key: 'main',
-      response_time: settings.responseTime ?? existingSettings?.responseTime ?? null,
-      language: settings.language ?? existingSettings?.language ?? null,
-      updated_at: new Date().toISOString()
-    };
-
-    const response = await withTimeout(fetch(`${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}?on_conflict=settings_key`, {
-      method: 'POST',
-      headers: getSupabaseHeaders('resolution=merge-duplicates,return=representation'),
-      body: JSON.stringify(payload)
-    }), 9000, 'Supabase settings save');
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText);
-    }
-
-    console.log('✅ Settings saved to cloud:', settings);
-    return true;
-  } catch (error) {
-    console.error('❌ Error saving settings:', error);
-    return false;
-  }
-}
-
-async function loadSettingsFromFirestore() {
-  const localSettings = JSON.parse(localStorage.getItem('experiment_settings') || 'null');
-  if (!useFirebase) {
-    return localSettings;
-  }
-  try {
-    const response = await withTimeout(fetch(`${SUPABASE_URL}/rest/v1/${SETTINGS_TABLE}?select=*&settings_key=eq.main&limit=1`, {
-      headers: getSupabaseHeaders()
-    }), 9000, 'Supabase settings load');
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText);
-    }
-
-    const rows = await response.json();
-    if (Array.isArray(rows) && rows.length > 0) {
-      const row = rows[0];
-      const settings = {
-        responseTime: row.response_time,
-        language: row.language
-      };
-      console.log('✅ Settings loaded from cloud:', settings);
-      return settings;
-    }
-  } catch (error) {
-    console.error('❌ Error loading settings:', error);
-  }
-  return localSettings;
-}
-
-function listenToSettingsChanges(callback) {
-  let lastSerialized = null;
-  const sync = async () => {
-    const settings = await loadSettingsFromFirestore();
-    const serialized = JSON.stringify(settings || {});
-    if (serialized !== lastSerialized) {
-      lastSerialized = serialized;
-      callback(settings || {});
-    }
-  };
-
-  sync();
-  const intervalId = setInterval(sync, 3000);
-  return () => clearInterval(intervalId);
-}
-
 // ============================================
 // 📊 数据管理系统
 // ============================================
+
 class DataManager {
   constructor() {
     this.sessionId = this.generateSessionId();
     const responseTime = typeof EXPERIMENT_VARIABLES !== 'undefined' ? EXPERIMENT_VARIABLES.responseTime : 1000;
     const language = typeof EXPERIMENT_VARIABLES !== 'undefined' ? EXPERIMENT_VARIABLES.language : 'zh';
-    
+
     this.sessionData = {
       sessionId: this.sessionId,
       startTime: new Date().toISOString(),
@@ -473,14 +408,14 @@ class DataManager {
     this.sessionData.timestamp = ts.toISOString();
     this.sessionData.endTime = ts.toISOString();
     this.sessionData.submitTimestamp = ts;
-    
+
     const analysisData = this.convertToAnalysisFormat();
-    
+
     this.saveToLocalStorage(analysisData);
     let savedToCloud = false;
-    
+
     if (useFirebase) {
-      savedToCloud = await saveToSupabase(analysisData);
+      savedToCloud = await saveToFirestore(analysisData);
     } else {
       console.warn('⚠️ Firebase unavailable, queueing submission locally');
     }
@@ -496,9 +431,9 @@ class DataManager {
       savedToCloud,
       queuedForSync: !savedToCloud
     });
-    
+
     window.dispatchEvent(new CustomEvent('dataUpdated', { detail: analysisData }));
-    
+
     return {
       data: analysisData,
       savedToCloud,
@@ -509,7 +444,8 @@ class DataManager {
   convertToAnalysisFormat() {
     const survey = this.sessionData.surveyAnswers;
     const choices = this.sessionData.userChoices;
-    const data = {
+
+    return {
       user_id: this.sessionData.sessionId,
       session_id: this.sessionData.sessionId,
       loading_time: this.sessionData.responseTime,
@@ -547,8 +483,6 @@ class DataManager {
       wtp3: survey.wtp3 || '',
       submit_time: this.sessionData.timestamp
     };
-    
-    return data;
   }
 
   getAnswerByVariable(variable) {
@@ -617,29 +551,23 @@ class DataManager {
 
   async filterDataAsync(filters) {
     let data = await this.loadAllData();
-    
     if (filters.loading_time) {
       data = data.filter(d => d.loading_time === filters.loading_time);
     }
-
     if (filters.insurance_choice) {
       data = data.filter(d => d.insurance_choice === filters.insurance_choice);
     }
-    
     return data;
   }
 
   filterData(filters) {
     let data = this.getAllData();
-    
     if (filters.loading_time) {
       data = data.filter(d => d.loading_time === filters.loading_time);
     }
-
     if (filters.insurance_choice) {
       data = data.filter(d => d.insurance_choice === filters.insurance_choice);
     }
-    
     return data;
   }
 
@@ -766,25 +694,11 @@ class DataManager {
       }
     };
 
-    try {
-      if (useFirebase) {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/${DATA_TABLE}?user_id=eq.${encodeURIComponent(recordKey)}`, {
-          method: 'DELETE',
-          headers: getSupabaseHeaders()
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText);
-        }
-      }
-      removeFromLocal();
-      return true;
-    } catch (error) {
-      console.error('❌ Error deleting record:', error);
-      removeFromLocal();
-      return false;
+    if (useFirebase) {
+      await deleteFirestoreRecord(recordKey);
     }
+    removeFromLocal();
+    return true;
   }
 
   async getStatisticsAsync() {
@@ -837,5 +751,8 @@ class DataManager {
   }
 }
 
-// 全局数据管理器实例
+// ============================================
+// 🚀 启动
+// ============================================
+
 let dataManager = new DataManager();
